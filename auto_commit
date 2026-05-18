@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# 1. Check for staged changes
+DIFF=$(git --no-pager diff --cached | head -c 10000)
+if [ -z "$DIFF" ]; then
+  echo "❌ No staged changes found. Run 'git add' first."
+  exit 1
+fi
+
+# 2. Extract Task ID
+BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
+TASK_ID=$(echo "$BRANCH_NAME" | grep -oE '[A-Z]+-[0-9]+' | head -n 1 || true)
+
+if [ -z "$TASK_ID" ]; then
+  TASK_ID="NO-TICKET"
+fi
+
+echo "🤖 Asking qwen2.5-coder:7b to review your code..."
+
+# 3. Advanced Context Prompt
+PROMPT="You are an expert Staff Software Engineer reviewing code changes. 
+Analyze the following git diff. Pay close attention ONLY to lines starting with '+' (additions) or '-' (deletions). Ignore unchanged context lines.
+
+Your goal is to write a highly accurate commit message.
+
+### FORMAT REQUIREMENTS:
+<type>: $TASK_ID <message> in <file_path>
+
+### STRICT RULES:
+1. TYPE: Must be one of [feat, fix, docs, style, refactor, perf, test, chore].
+2. VERB TENSE: Start the <message> with a capitalized past-tense verb (e.g., 'Added', 'Removed', 'Fixed', 'Refactored').
+3. SPECIFICITY: You MUST reference exact variable names, API endpoints, or database tables involved in the diff. 
+4. PRIMARY FILE: You MUST conclude the commit string with the exact file path where the change occurred, preceded by the word 'in' (e.g., 'in plenty_markets/invoice_ra.py'). If multiple files were changed, identify the primary/most significant file containing the core logic change and use ONLY that file path.
+5. LENGTH LIMIT: The entire message MUST be under 72 characters. Be concise.
+6. NO MARKDOWN: Output ONLY the raw text string. Do not use quotes, backticks, or code blocks.
+
+### CONTEXTUAL AWARENESS:
+- If you see changes to 'pyproject.toml' or 'requirements.txt', use the 'chore' type and mention the specific dependency updated.
+- If you see print statements or console logs removed, use the 'chore' type and say 'Cleaned up debug statements'.
+- If you see 'raise Exception' or error handling added, mention exactly what error is being caught.
+
+Example 1 (Feature):
+feat: QQM-133 Added 'rate_limit' parameter to /orders/ endpoint in plenty_markets/invoice_ra.py
+
+Example 2 (Fix - Multiple Files):
+fix: QQM-134 Resolved user table deadlock by reordering transaction sequence in database/connection.py
+
+Git Diff:
+$DIFF"
+
+# 4. Call local Ollama
+RESPONSE=$(curl -s --max-time 15 http://localhost:11434/api/generate \
+  -d "$(jq -n \
+    --arg model "qwen2.5-coder:7b" \
+    --arg prompt "$PROMPT" \
+    '{
+      model: $model, 
+      prompt: $prompt, 
+      stream: false, 
+      options: {
+        temperature: 0.1
+      }
+    }')" \
+  | jq -r '.response // empty')
+
+if [ -z "$RESPONSE" ]; then
+  echo "❌ Ollama failed to generate a response. Is it running?"
+  exit 1
+fi
+
+# 5. Show the result and ask for confirmation
+echo -e "\nProposed Commit Message:"
+echo -e "\033[1;32m$RESPONSE\033[0m\n"
+
+read -p "Commit with this message? [y/n/e(dit)]: " choice
+
+case "$choice" in
+  y|Y ) 
+    git commit -m "$RESPONSE"
+    echo "✅ Committed successfully!"
+    ;;
+  e|E ) 
+    TMP_FILE=$(mktemp)
+    echo "$RESPONSE" > "$TMP_FILE"
+    ${EDITOR:-nano} "$TMP_FILE"
+    git commit -F "$TMP_FILE"
+    rm "$TMP_FILE"
+    echo "✅ Committed successfully!"
+    ;;
+  * ) 
+    echo "🚫 Commit aborted."
+    exit 0
+    ;;
+esac
