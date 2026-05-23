@@ -31,7 +31,7 @@ Your goal is to write a highly accurate commit message.
 1. TYPE: Must be one of [feat, fix, docs, style, refactor, perf, test, chore].
 2. VERB TENSE: Start the <message> with a capitalized past-tense verb (e.g., 'Added', 'Removed', 'Fixed', 'Refactored').
 3. SPECIFICITY: You MUST reference exact variable names, API endpoints, or database tables involved in the diff. 
-4. PRIMARY FILE: You MUST conclude the commit string with the exact file path where the change occurred, preceded by the word 'in' (e.g., 'in plenty_markets/invoice_ra.py'). If multiple files were changed, identify the primary/most significant file containing the core logic change and use ONLY that file path.
+4. PRIMARY FILE: You MUST conclude the commit string with the exact file path where the change occurred, preceded by the word 'in' (e.g., 'in src/module/file_name.py'). If multiple files were changed, identify the primary/most significant file containing the core logic change and use ONLY that file path.
 5. LENGTH LIMIT: The entire message MUST be under 72 characters. Be concise.
 6. NO MARKDOWN: Output ONLY the raw text string. Do not use quotes, backticks, or code blocks.
 
@@ -41,10 +41,10 @@ Your goal is to write a highly accurate commit message.
 - If you see 'raise Exception' or error handling added, mention exactly what error is being caught.
 
 Example 1 (Feature):
-feat: QQM-133 Added 'rate_limit' parameter to /orders/ endpoint in plenty_markets/invoice_ra.py
+feat: $TASK_ID Added 'rate_limit' parameter to /orders/ endpoint in src/api/routes.py
 
 Example 2 (Fix - Multiple Files):
-fix: QQM-134 Resolved user table deadlock by reordering transaction sequence in database/connection.py
+fix: $TASK_ID Resolved user table deadlock by reordering transaction sequence in database/connection.py
 
 Git Diff:
 $DIFF"
